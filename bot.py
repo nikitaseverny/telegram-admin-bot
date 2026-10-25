@@ -1,6 +1,7 @@
 """
 Admin Notification Bot
 Receives booking notifications via webhook and forwards to admin chat(s).
+Also responds to /start command to show chat ID.
 Deploy to Railway alongside main bot.
 """
 import json
@@ -37,17 +38,14 @@ async def notify(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400)
 
-    # Required fields
-    event = data.get("event")  # "booking_created" or "booking_cancelled"
+    event = data.get("event")
     booking = data.get("booking")
 
     if not event or not booking:
         return web.json_response({"error": "Missing event or booking"}, status=400)
 
-    # Format message
     text = format_notification(event, booking)
 
-    # Send to all admin chats
     results = []
     for chat_id in ADMIN_CHAT_IDS:
         try:
@@ -64,7 +62,6 @@ async def notify(request: web.Request) -> web.Response:
 
 
 def format_notification(event: str, booking: dict) -> str:
-    """Format notification like user sees it."""
     service = booking.get("service", "Unknown")
     date = booking.get("date", "")
     time = booking.get("time", "")
@@ -100,19 +97,25 @@ def format_notification(event: str, booking: dict) -> str:
 
 # ─── Main ───────────────────────────────────────────────────────
 async def on_startup(app: web.Application) -> None:
-    """Initialize bot and set webhook."""
+    """Initialize bot application and start polling."""
     bot_app = Application.builder().token(BOT_TOKEN).build()
     bot_app.add_handler(CommandHandler("start", start))
     await bot_app.initialize()
     await bot_app.start()
+    # Start polling in background
+    await bot_app.updater.start_polling()
+    app["bot_app"] = bot_app
     app["bot"] = bot_app.bot
-    logging.info("Admin bot started")
+    logging.info("Admin bot started (polling + webhook)")
 
 
 async def on_shutdown(app: web.Application) -> None:
     """Cleanup."""
-    if "bot" in app:
-        await app["bot"].get_updates  # keep reference
+    bot_app = app.get("bot_app")
+    if bot_app:
+        await bot_app.updater.stop()
+        await bot_app.stop()
+        await bot_app.shutdown()
     logging.info("Admin bot stopped")
 
 
