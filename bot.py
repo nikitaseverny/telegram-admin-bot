@@ -121,6 +121,9 @@ def main() -> None:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=logging.INFO,
     )
+    # Suppress httpx logs (contain tokens in URLs)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     if BOT_TOKEN == "YOUR_ADMIN_BOT_TOKEN":
         raise RuntimeError("Set ADMIN_BOT_TOKEN env var")
